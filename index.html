@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TV-style Media Player</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box;font-family:Inter,Segoe UI,Arial,sans-serif}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071126 0%, #061021 100%);color:#e6eef6}
+    .app{display:grid;grid-template-columns:220px 1fr 340px;gap:18px;padding:18px;height:100vh}
+
+    /* sidebar */
+    .sidebar{background:var(--card);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px}
+    .brand{font-weight:700;color:var(--accent);font-size:18px}
+    .channels{display:flex;flex-direction:column;gap:8px;overflow:auto;padding-right:6px}
+    .channel{padding:8px;border-radius:8px;cursor:pointer;background:transparent;border:1px solid transparent}
+    .channel:hover{background:var(--glass)}
+    .channel.active{background:linear-gradient(90deg,rgba(6,182,212,0.12),rgba(6,182,212,0.04));border-color:rgba(6,182,212,0.15)}
+
+    /* center */
+    .center{display:flex;flex-direction:column;gap:12px}
+    .player-card{background:var(--card);padding:12px;border-radius:12px;display:flex;flex-direction:column}
+    .video-wrap{position:relative;border-radius:8px;overflow:hidden;background:black}
+    video{width:100%;height:600px;object-fit:cover;background:#000}
+    .controls{display:flex;align-items:center;gap:10px;padding:8px}
+    .btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px;border-radius:8px;cursor:pointer}
+    .progress{flex:1;height:8px;background:rgba(255,255,255,0.04);border-radius:6px;cursor:pointer;position:relative}
+    .progress > i{position:absolute;left:0;top:0;height:100%;background:var(--accent);width:0;border-radius:6px}
+
+    .meta{display:flex;justify-content:space-between;align-items:center;padding:6px}
+
+    /* guide */
+    .guide{background:var(--card);border-radius:12px;padding:12px;overflow:auto}
+    .guide-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .schedule{display:flex;flex-direction:column;gap:8px}
+    .show-row{display:flex;gap:8px}
+    .show{min-width:120px;padding:10px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));cursor:pointer;border:1px solid rgba(255,255,255,0.02)}
+    .show.now{outline:2px solid var(--accent)}
+
+    /* playlist */
+    .playlist{display:flex;flex-direction:column;gap:8px}
+    .item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.02);cursor:pointer}
+    .item:hover{background:var(--glass)}
+
+    footer{position:fixed;left:18px;right:18px;bottom:18px;background:rgba(2,6,23,0.6);padding:8px;border-radius:10px;color:var(--muted);font-size:13px;text-align:center}
+
+    /* responsive */
+    @media (max-width:980px){.app{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;padding:12px}.center{order:2}.sidebar{order:1;flex-direction:row;overflow:auto}.guide{order:3}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">MyTV — odtwarzacz</div>
+      <div class="channels" id="channels"></div>
+      <div style="margin-top:auto;font-size:13px;color:var(--muted)">Kliknij kanał, aby załadować jego ramówkę</div>
+    </aside>
+
+    <main class="center">
+      <section class="player-card">
+        <div class="video-wrap">
+          <video id="player" preload="metadata" tabindex="0">
+            <!-- źródła będą dynamicznie wstawiane -->
+          </video>
+        </div>
+
+        <div class="meta">
+          <div>
+            <div id="title" style="font-weight:700">Wybierz program</div>
+            <div id="sub" style="color:var(--muted);font-size:13px">Kanał · Czas trwania</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn" id="prev">⟸ Prev</button>
+            <button class="btn" id="play">Play</button>
+            <button class="btn" id="next">Next ⟹</button>
+            <button class="btn" id="fullscreen">⤢</button>
+          </div>
+        </div>
+
+        <div class="controls">
+          <div class="btn" id="mute">🔊</div>
+          <div class="progress" id="progress"><i></i></div>
+          <div style="width:60px;text-align:right;color:var(--muted)" id="time">00:00 / 00:00</div>
+        </div>
+
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+          <input id="search" placeholder="Szukaj programu..." style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit">
+          <select id="speed" style="padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:inherit">
+            <option value="1">1x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="0.75">0.75x</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="guide" id="guide">
+        <div class="guide-header">
+          <div style="font-weight:700">Ramówka</div>
+          <div style="color:var(--muted);font-size:13px" id="nowTime"></div>
+        </div>
+        <div class="schedule" id="schedule"></div>
+      </section>
+    </main>
+
+    <aside class="guide" style="display:flex;flex-direction:column;gap:12px">
+      <div style="font-weight:700">Playlista</div>
+      <div class="playlist" id="playlist"></div>
+      <div style="font-size:13px;color:var(--muted);margin-top:auto">Pliki mp4 i inne można dodać do folderu /media i zaktualizować ścieżki w skrypcie.</div>
+    </aside>
+  </div>
+
+
+<script>
+
+const channelsData = [
+  { id: 'ch3', name: 'Chanel 3', schedule: [
+    {id:'k1',title:'Smerfy',src:'media/smurfs-odc1.mp4',start:'20:15',duration:20},
+    {id:'k2',title:'Spongebash',src:'media/spongebash.mp4',start:'20:35',duration:25}
+  ]}
+];
+
+// ---- UI refs ----
+const channelsEl = document.getElementById('channels');
+const scheduleEl = document.getElementById('schedule');
+const playlistEl = document.getElementById('playlist');
+const player = document.getElementById('player');
+const titleEl = document.getElementById('title');
+const subEl = document.getElementById('sub');
+const playBtn = document.getElementById('play');
+const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('next');
+const muteBtn = document.getElementById('mute');
+const progress = document.getElementById('progress');
+const progressBar = progress.querySelector('i');
+const timeEl = document.getElementById('time');
+const searchInput = document.getElementById('search');
+const speedSel = document.getElementById('speed');
+const nowTimeEl = document.getElementById('nowTime');
+
+let currentChannel = null;
+let flatList = []; // flattened list of shows for prev/next
+let currentIndex = -1;
+
+function hhmmToMinutes(t){const [hh,mm]=t.split(':').map(Number);return hh*60+mm}
+function formatTime(s){if(!isFinite(s)) return '00:00';const m=Math.floor(s/60);const sec=Math.floor(s%60);return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')}
+
+function renderChannels(){channelsEl.innerHTML='';channelsData.forEach(ch=>{
+  const el=document.createElement('div');el.className='channel';el.textContent=ch.name;el.onclick=()=>selectChannel(ch.id);el.id='chan-'+ch.id;channelsEl.appendChild(el);
+})}
+
+function selectChannel(id){document.querySelectorAll('.channel').forEach(n=>n.classList.remove('active'));document.getElementById('chan-'+id).classList.add('active');
+  currentChannel = channelsData.find(c=>c.id===id);
+  renderSchedule(currentChannel);
+  buildPlaylist(currentChannel);
+}
+
+function renderSchedule(channel){scheduleEl.innerHTML='';nowTimeEl.textContent=new Date().toLocaleTimeString();
+  const row=document.createElement('div');row.className='show-row';
+  channel.schedule.forEach(item=>{
+    const el=document.createElement('div');el.className='show';el.innerHTML=`<div style="font-weight:700">${item.title}</div><div style="color:var(--muted);font-size:13px">${item.start} · ${item.duration} min</div>`;
+    el.onclick=()=>playItemById(item.id);
+    // highlight if it's now
+    const now=new Date();const nowMin=now.getHours()*60+now.getMinutes();
+    const s=hhmmToMinutes(item.start);if(nowMin>=s && nowMin < s+item.duration){el.classList.add('now')}
+    scheduleEl.appendChild(el);
+  })
+}
+
+function buildPlaylist(channel){playlistEl.innerHTML='';flatList=[];channel.schedule.forEach(item=>{flatList.push({...item,channel:channel.name});
+  const it=document.createElement('div');it.className='item';it.innerHTML=`<div style="flex:1"><div style="font-weight:700">${item.title}</div><div style="color:var(--muted);font-size:13px">${item.start} · ${item.duration} min</div></div>`;
+  it.onclick=()=>playItemById(item.id);
+  playlistEl.appendChild(it);
+})
+}
+
+function playItemById(id){const idx=flatList.findIndex(i=>i.id===id);if(idx===-1) return;playIndex(idx);} 
+
+function playIndex(idx){currentIndex=idx;const it=flatList[idx];if(!it) return;loadSource(it.src);titleEl.textContent=it.title;subEl.textContent=`${it.channel} · ${it.duration} min`;
+  highlightNowPlaying();player.play();playBtn.textContent='Pause';}
+
+function highlightNowPlaying(){document.querySelectorAll('.item').forEach((el,i)=>el.style.opacity=(i===currentIndex?1:0.7));}
+
+function loadSource(src){player.src=src;player.load();}
+
+// controls
+playBtn.onclick=()=>{if(player.paused) {player.play(); playBtn.textContent='Pause'} else {player.pause(); playBtn.textContent='Play'}}
+prevBtn.onclick=()=>{if(currentIndex>0) playIndex(currentIndex-1)}
+nextBtn.onclick=()=>{if(currentIndex<flatList.length-1) playIndex(currentIndex+1)}
+muteBtn.onclick=()=>{player.muted=!player.muted; muteBtn.textContent=player.muted? '🔇':'🔊'}
+fullscreen.onclick=()=>{if(document.fullscreenElement) document.exitFullscreen(); else player.requestFullscreen();}
+
+// progress handling
+player.addEventListener('timeupdate', ()=>{
+  const pct = player.duration ? (player.currentTime / player.duration) * 100 : 0;progressBar.style.width = pct + '%';
+  timeEl.textContent = formatTime(player.currentTime) + ' / ' + formatTime(player.duration);
+});
+progress.addEventListener('click', (e)=>{const rect=progress.getBoundingClientRect();const p=(e.clientX-rect.left)/rect.width; if(player.duration) player.currentTime = p*player.duration});
+
+// autoplay next
+player.addEventListener('ended', ()=>{if(currentIndex<flatList.length-1) playIndex(currentIndex+1); else playBtn.textContent='Play'});
+
+// search filter
+searchInput.addEventListener('input', ()=>{
+  const q=searchInput.value.toLowerCase();document.querySelectorAll('.item').forEach((el,i)=>{
+    const text=flatList[i].title.toLowerCase();el.style.display = text.includes(q) ? 'flex': 'none';
+  })
+});
+
+// fullscreen enhancement
+player.addEventListener("loadedmetadata", () => {
+  // zapamiętaj proporcje filmu
+  player.dataset.aspect = (player.videoWidth / player.videoHeight).toFixed(2);
+});
+
+player.addEventListener("fullscreenchange", () => {
+  if (document.fullscreenElement) {
+    // Tryb fullscreen
+    document.body.style.background = "black";
+    player.style.width = "100vw";
+    player.style.height = "100vh";
+    player.style.objectFit = "contain";
+
+    // Ustal proporcje
+    const ratio = parseFloat(player.dataset.aspect || 16/9);
+    if (Math.abs(ratio - 1.33) < 0.1) {
+      // 4:3
+      player.style.objectFit = "contain";
+      player.style.backgroundColor = "black";
+    } else {
+      // 16:9 lub szerszy
+      player.style.objectFit = "cover";
+    }
+
+    // Ukryj interfejs dla pełnej widoczności
+    document.querySelector(".meta").style.display = "none";
+    document.querySelector(".controls").style.display = "none";
+  } else {
+    // Wyjście z fullscreen
+    document.body.style.background = "";
+    player.style.width = "100%";
+    player.style.height = "600px";
+    player.style.objectFit = "cover";
+    document.querySelector(".meta").style.display = "";
+    document.querySelector(".controls").style.display = "";
+  }
+});
+
+
+// speed control
+speedSel.addEventListener('change', ()=>{player.playbackRate = parseFloat(speedSel.value)});
+
+// initialize
+renderChannels();selectChannel(channelsData[0].id);
+
+// helper: play first item of channel if now playing
+(function autoplayIfNow(){const now=new Date();const min=now.getHours()*60+now.getMinutes();const ch=channelsData[0];for(const c of channelsData){for(const s of c.schedule){const start=hhmmToMinutes(s.start);if(min>=start && min<start+s.duration){selectChannel(c.id);playItemById(s.id);return}}} })();
+
+</script>
+</body>
+</html>
