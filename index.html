@@ -182,7 +182,25 @@ function playIndex(idx){currentIndex=idx;const it=flatList[idx];if(!it) return;l
 
 function highlightNowPlaying(){document.querySelectorAll('.item').forEach((el,i)=>el.style.opacity=(i===currentIndex?1:0.7));}
 
-function loadSource(src){player.src=src;player.load();}
+function normalizeDropboxUrl(url) {
+  // zamienia link dropboxa w stylu ?dl=0 lub ?dl=1 na bezpośredni link
+  if (url.includes("dropbox.com")) {
+    // usuwamy query i zamieniamy domenę
+    return url
+      .replace("www.dropbox.com", "dl.dropboxusercontent.com")
+      .replace("?dl=0", "")
+      .replace("?dl=1", "")
+      .replace("?raw=1", "");
+  }
+  return url;
+}
+
+function loadSource(src) {
+  const directUrl = normalizeDropboxUrl(src);
+  player.src = directUrl;
+  player.load();
+}
+
 
 // controls
 playBtn.onclick=()=>{if(player.paused) {player.play(); playBtn.textContent='Pause'} else {player.pause(); playBtn.textContent='Play'}}
